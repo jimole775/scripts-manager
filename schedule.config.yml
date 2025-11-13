@@ -1,0 +1,19 @@
+# store 配置模块 的数据存储结构
+  version: 1.0.12 # 数据版本，如果要新增删除字段，记得更新此字段
+
+  user: # 当前app的用户信息 
+    name: 'admin'
+    avator: ''
+
+
+  hosts: # 各环境的主机信息
+    - env: "test"
+      project: "项目1"
+      fixed: 1
+      host: "xx.xx.x.xxx"
+      port: 8000
+  accounts: # 各用户的账密信息
+    - env: "test"
+      project: "项目1"
+      account: "admin"
+      password: "admin"
