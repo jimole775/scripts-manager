@@ -1,0 +1,26 @@
+# store 脚本模块 的数据存储结构
+  version: 1.0.2 # 数据版本，如果要新增删除字段，记得更新此字段
+
+  vmerge: # vmerge 脚本的配置信息
+    tapd_tasks: "" # 任务id
+    tapd_bugs: "" # bus id
+    scan_dir: "D:\\my_work" # 需要扫描的目录
+    scan_ignore_folders: "scripts-manager,node_modules,.vscode" # 需要忽略的目录
+    release_branch: "prod" # 主分支，需要以这个分支检出发版分支
+
+
+  vcommit: # vcommit 脚本的配置信息
+    tapd_tasks: "" # 任务id
+    tapd_bugs: "" # bus id
+    scan_dir: "D:\\my_work" # 需要扫描的目录
+    scan_ignore_folders: "scripts-manager,node_modules,.vscode" # 需要忽略的目录
+    release_branch: "prod" # 主分支，需要以这个分支检出发版分支
+    checks_commit_limit: 699
+
+
+  apiScanner: # apiScanner 脚本的配置信息
+    xxx: ''
+
+
+  vbranch: # vbranch 脚本的配置信息
+    xxx: ''
