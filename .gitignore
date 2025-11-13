@@ -1,0 +1,32 @@
+.DS_Store
+.eslintcache
+node_modules
+/dist
+/out
+
+# local env files
+.env.local
+.env.*.local
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.err.log
+*.log*
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+med.tar
+
+# 本地 vscode 配置
+.vscode
+
+#Electron-builder output
+/dist_electron
