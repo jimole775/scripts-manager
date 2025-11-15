@@ -1,0 +1,17 @@
+/***************** 扩展元素的点击区域 (start) **************/
+.expand-click-area {
+  position: relative; /* 确保伪元素相对于按钮定位 */
+  z-index: 1; /* 确保按钮在伪元素之上 */
+}
+
+.expand-click-area::before {
+  content: '';
+  position: absolute;
+  top: -10px; /* 向上扩展10px */
+  right: -10px; /* 向右扩展10px */
+  bottom: -10px; /* 向下扩展10px */
+  left: -10px; /* 向左扩展10px */
+  background: transparent; /* 确保伪元素是透明的 */
+  z-index: -1; /* 确保伪元素在按钮之下 */
+}
+/***************** 扩展元素的点击区域 (end) **************/
