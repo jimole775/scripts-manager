@@ -20,7 +20,3 @@
 
   apiScanner: # apiScanner 脚本的配置信息
     xxx: ''
-
-
-  vbranch: # vbranch 脚本的配置信息
-    xxx: ''

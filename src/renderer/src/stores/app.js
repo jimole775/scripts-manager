@@ -10,7 +10,6 @@ export const useAppStore = defineStore('app', () => {
   const vmerge = ref({})
   const vcommit = ref({})
   const apiScanner = ref({})
-  const vbranch = ref({})
 
   // 同步配置数据
   const initBaseConfig = async () => {
@@ -25,7 +24,6 @@ export const useAppStore = defineStore('app', () => {
     const config = await getScriptConfig()
     vmerge.value = config.vmerge
     vcommit.value = config.vcommit
-    vbranch.value = config.vbranch
     apiScanner.value = config.apiScanner
   }
 
@@ -36,7 +34,6 @@ export const useAppStore = defineStore('app', () => {
     accounts,
     vmerge,
     vcommit,
-    vbranch,
     apiScanner,
     initBaseConfig,
     initScriptConfig,

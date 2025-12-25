@@ -68,4 +68,14 @@ export default [
       module: 'script'
     }
   },
+  {
+    path: '/script-edit',
+    name: 'script-edit',
+    component: () => import('@ui/pages/script-edit/index.vue'),
+    meta: {
+      title: '脚本编辑',
+      keepAlive: true,
+      module: 'script'
+    }
+  },
 ]

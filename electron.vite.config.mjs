@@ -72,7 +72,6 @@ export default defineConfig({
           vcommit: resolve(__dirname, 'src/scripts/vcommit/main.js'), // 独立入口
           // 'api-scanner': resolve(__dirname, 'src/scripts/api-scanner/main.js'), // 独立入口
           vmerge: resolve(__dirname, 'src/scripts/vmerge/main.js'), // 独立入口
-          // vbranch: resolve(__dirname, 'src/scripts/vbranch/main.js'), // 独立入口
         },
         output: {
           entryFileNames: '[name].js',
@@ -127,6 +126,7 @@ export default defineConfig({
         lodash: 'lodash-es', // 指向 lodash 的 ES 模块版本
         '@': resolve(__dirname, 'src'),
         '@ui': resolve(__dirname, 'src/renderer/src'),
+        '@scripts': resolve(__dirname, 'src/scripts'),
         '@modal': resolve(__dirname, 'src/renderer/modal'),
         '@common': resolve(__dirname, 'src/common'),
         '@preload': resolve(__dirname, 'src/preload'),
