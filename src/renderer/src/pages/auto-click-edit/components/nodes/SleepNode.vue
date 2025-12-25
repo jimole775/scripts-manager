@@ -4,6 +4,7 @@
     title="睡眠" 
     :selected="selected" 
     :hasConnections="hasConnections" 
+    :data="data"
     @delete="onDelete"
   >
     <div class="node-body">

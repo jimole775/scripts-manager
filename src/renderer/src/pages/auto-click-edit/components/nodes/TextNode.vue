@@ -4,6 +4,7 @@
     title="文本输入" 
     :selected="selected" 
     :hasConnections="hasConnections" 
+    :data="data"
     @delete="onDelete"
   >
     <div class="node-body">

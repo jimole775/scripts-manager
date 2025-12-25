@@ -82,17 +82,21 @@ const props = defineProps({
   hasConnections: {
     type: Boolean,
     default: false
+  },
+  data: {
+    type: Object,
+    default: () => ({})
   }
 })
 
 const emit = defineEmits(['delete'])
 
 // 获取 VueFlow 实例
-const { updateNodeInternals } = useVueFlow()
+const { updateNodeInternals, updateNodeData } = useVueFlow()
 
 // 连接点位置状态：0=bottom, 1=left, 2=right (跳过 top)
-// 默认输出在底部，输入在顶部
-const rotationState = ref(0)
+// 默认输出在右侧(2)，输入在左侧
+const rotationState = ref(props.data?.rotation ?? 2)
 
 // 位置映射（跳过 top）
 const positions = [Position.Bottom, Position.Left, Position.Right]
@@ -130,6 +134,11 @@ const handleDeleteClick = () => {
 const onRotate = async () => {
   // 逆时针旋转：bottom(0) -> left(1) -> right(2) -> bottom(0)
   rotationState.value = (rotationState.value + 1) % 3
+  
+  // 更新节点数据以便持久化
+  if (props.id) {
+    updateNodeData(props.id, { rotation: rotationState.value })
+  }
   
   // 等待 DOM 更新后，通知 VueFlow 更新节点的连接点
   await nextTick()

@@ -84,9 +84,9 @@ const addNewScript = () => {
           type: 'input', // Standard input node as start
           label: '开始', 
           position: { x: 250, y: 50 },
+          sourcePosition: 'right',
           deletable: false,
-          data: { label: '开始' },
-          dragHandle: '.drag-handle'
+          data: { label: '开始' }
         }
       ],
       edges: []
@@ -154,6 +154,21 @@ const loadScripts = () => {
   if (saved) {
     try {
       scripts.value = JSON.parse(saved)
+      
+      // Fix: Remove dragHandle from existing start nodes to make them draggable
+      scripts.value.forEach(script => {
+        if (script.content && script.content.nodes) {
+          const startNode = script.content.nodes.find(n => n.id === 'start-node')
+          if (startNode) {
+            if (startNode.dragHandle === '.drag-handle') {
+              delete startNode.dragHandle
+            }
+            // Force source position to right (rotate 90 deg left)
+            startNode.sourcePosition = 'right'
+          }
+        }
+      })
+
       if (scripts.value.length > 0) {
         activeScriptId.value = scripts.value[0].id
       }
