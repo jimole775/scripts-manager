@@ -38,16 +38,16 @@ export default [
       module: 'script'
     }
   },
-  {
-    path: '/vbranch',
-    name: 'vbranch',
-    component: () => import('@ui/pages/vbranch/index.vue'),
-    meta: {
-      title: '创建分支',
-      keepAlive: true,
-      module: 'script'
-    }
-  },
+  // {
+  //   path: '/vbranch',
+  //   name: 'vbranch',
+  //   component: () => import('@ui/pages/vbranch/index.vue'),
+  //   meta: {
+  //     title: '创建分支',
+  //     keepAlive: true,
+  //     module: 'script'
+  //   }
+  // },
   {
     path: '/config-setting',
     name: 'config-setting',
@@ -56,6 +56,16 @@ export default [
       title: '配置设置',
       keepAlive: true,
       module: 'config'
+    }
+  },
+  {
+    path: '/auto-click-edit',
+    name: 'auto-click-edit',
+    component: () => import('@ui/pages/auto-click-edit/index.vue'),
+    meta: {
+      title: '自动点击编辑',
+      keepAlive: true,
+      module: 'script'
     }
   },
 ]
