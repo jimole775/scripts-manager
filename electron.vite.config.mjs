@@ -70,7 +70,7 @@ export default defineConfig({
         input: {
           preload: resolve(__dirname, 'src/preload/index.js'), // 脚本预载入口
           vcommit: resolve(__dirname, 'src/scripts/vcommit/main.js'), // 独立入口
-          'api-scanner': resolve(__dirname, 'src/scripts/api-scanner/main.js'), // 独立入口
+          // 'api-scanner': resolve(__dirname, 'src/scripts/api-scanner/main.js'), // 独立入口
           vmerge: resolve(__dirname, 'src/scripts/vmerge/main.js'), // 独立入口
           // vbranch: resolve(__dirname, 'src/scripts/vbranch/main.js'), // 独立入口
         },
