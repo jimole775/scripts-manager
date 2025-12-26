@@ -1,16 +1,15 @@
 <template>
   <NodeWrapper 
     :id="id"
-    title="睡眠" 
+    :title="label || '睡眠'" 
     :selected="selected" 
     :hasConnections="hasConnections"
-    :rotation="data.rotation || 0"
+    :rotation="data.rotation !== undefined ? data.rotation : 2"
     @delete="onDelete"
   >
     <div class="node-body">
       <div class="time">
-        {{ data.duration || 0 }} 秒
-        <span v-if="data.random" class="random-badge">随</span>
+        {{ timeDisplay }}
       </div>
     </div>
   </NodeWrapper>
@@ -21,7 +20,7 @@ import { computed } from 'vue'
 import NodeWrapper from './NodeWrapper.vue'
 import { useVueFlow } from '@vue-flow/core'
 
-const props = defineProps(['id', 'data', 'selected'])
+const props = defineProps(['id', 'data', 'selected', 'label'])
 const { removeNodes, getConnectedEdges, findNode } = useVueFlow()
 
 // 检查当前节点是否有连接线
@@ -32,22 +31,39 @@ const hasConnections = computed(() => {
   return connectedEdges.length > 0
 })
 
+// 计算显示的时间文本
+const timeDisplay = computed(() => {
+  const duration = props.data.duration || 0
+  const maxDuration = props.data.maxDuration || duration
+  
+  if (props.data.random) {
+    return `${duration}~${maxDuration} 秒`
+  } else {
+    return `${duration} 秒`
+  }
+})
+
 const onDelete = () => {
   removeNodes(props.id)
 }
 </script>
 
 <style scoped>
+.node-body {
+  text-align: center;
+  margin-top: -2px;
+}
 .time {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: bold;
   color: #fa8c16;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 3px;
 }
 .random-badge {
-  font-size: 10px;
+  font-size: 8px;
   background: #fff7e6;
   border: 1px solid #ffd591;
   padding: 0 2px;
