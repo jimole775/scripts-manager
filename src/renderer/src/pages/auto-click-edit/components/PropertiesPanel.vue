@@ -14,7 +14,12 @@
     <div v-if="node.type === 'image'" class="type-form">
       <div class="form-item">
         <label>图片</label>
-        <input ref="fileInputRef" type="file" accept="image/*" @change="handleImageUpload" />
+        <div class="upload-actions">
+          <button @click="triggerFileUpload" class="btn-upload">上传</button>
+          <button @click="startScreenshot" class="btn-screenshot">截图</button>
+          <button @click="pasteFromClipboard" class="btn-paste">粘贴</button>
+        </div>
+        <input ref="fileInputRef" type="file" accept="image/*" @change="handleImageUpload" style="display: none;" />
         <div v-if="thumbnailSrc" class="preview">
           <img 
             :src="thumbnailSrc" 
@@ -22,6 +27,9 @@
             class="preview-thumbnail"
           />
           <button @click="clearImage" class="btn-clear">清除</button>
+        </div>
+        <div v-else class="paste-hint">
+          提示：可以使用 Ctrl+V 粘贴剪贴板中的图片
         </div>
       </div>
       
@@ -116,11 +124,19 @@
       <p v-else class="preview-error">加载失败</p>
     </div>
   </a-modal>
+  
+  <!-- 截图工具 -->
+  <ScreenshotTool 
+    v-if="isScreenshotMode"
+    @complete="handleScreenshotComplete"
+    @cancel="handleScreenshotCancel"
+  />
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { storeImage, deleteImage, getThumbnail, storeThumbnail, deleteThumbnail, getImage } from '../utils/imageStore'
+import ScreenshotTool from './ScreenshotTool.vue'
 
 const props = defineProps({
   selectedNode: {
@@ -135,6 +151,22 @@ const node = computed(() => props.selectedNode)
 
 // 文件输入框的引用
 const fileInputRef = ref(null)
+
+// 截图相关状态
+const isScreenshotMode = ref(false)
+const screenshotCanvas = ref(null)
+
+// 触发文件上传
+const triggerFileUpload = () => {
+  fileInputRef.value?.click()
+}
+
+// 开始截图
+const startScreenshot = () => {
+  console.log('开始截图，isScreenshotMode 设置为 true')
+  isScreenshotMode.value = true
+  console.log('isScreenshotMode.value:', isScreenshotMode.value)
+}
 
 // 获取缩略图（从内存）- 使用 computed 以便响应式更新
 const thumbnailSrc = computed(() => {
@@ -194,85 +226,11 @@ const onModeChange = () => {
 const handleImageUpload = async (event) => {
   const file = event.target.files[0]
   if (file && node.value) {
-    try {
-      const img = new Image()
-      const reader = new FileReader()
-      
-      reader.onload = (e) => {
-        const originalImage = e.target.result
-        const originalSize = (originalImage.length * 0.75 / 1024).toFixed(2)
-        img.src = originalImage
-        img.dataset.originalImage = originalImage
-        img.dataset.originalSize = originalSize
-      }
-      
-      img.onload = async () => {
-        const originalWidth = img.width
-        const originalHeight = img.height
-        const originalSize = parseFloat(img.dataset.originalSize)
-        const originalImage = img.dataset.originalImage
-        
-        // 只创建缩略图用于节点显示：最大 120px，质量 0.6
-        const thumbMaxSize = 120
-        let thumbWidth = originalWidth
-        let thumbHeight = originalHeight
-        
-        if (thumbWidth > thumbHeight) {
-          if (thumbWidth > thumbMaxSize) {
-            thumbHeight = Math.round((thumbHeight * thumbMaxSize) / thumbWidth)
-            thumbWidth = thumbMaxSize
-          }
-        } else {
-          if (thumbHeight > thumbMaxSize) {
-            thumbWidth = Math.round((thumbWidth * thumbMaxSize) / thumbHeight)
-            thumbHeight = thumbMaxSize
-          }
-        }
-        
-        const thumbCanvas = document.createElement('canvas')
-        const thumbCtx = thumbCanvas.getContext('2d', { alpha: false })
-        thumbCanvas.width = thumbWidth
-        thumbCanvas.height = thumbHeight
-        
-        thumbCtx.imageSmoothingEnabled = true
-        thumbCtx.imageSmoothingQuality = 'medium'
-        thumbCtx.drawImage(img, 0, 0, thumbWidth, thumbHeight)
-        
-        const thumbnail = thumbCanvas.toDataURL('image/jpeg', 0.6)
-        const thumbnailSize = (thumbnail.length * 0.75 / 1024).toFixed(2)
-        
-        // 生成唯一的 ID
-        const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        const thumbnailId = `thumb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        
-        // 原图存储到 IndexedDB，缩略图存储到内存
-        await storeImage(imageId, originalImage)
-        storeThumbnail(thumbnailId, thumbnail)
-        
-        // 保存数据：只保存 ID 引用
-        if (!node.value.data) node.value.data = {}
-        node.value.data.imageId = imageId // 原图 ID（存储在 IndexedDB）
-        node.value.data.thumbnailId = thumbnailId // 缩略图 ID（存储在内存）
-        node.value.data.imageName = file.name
-        node.value.data.imageInfo = {
-          originalWidth,
-          originalHeight,
-          thumbnailWidth: thumbWidth,
-          thumbnailHeight: thumbHeight,
-          originalSize,
-          thumbnailSize: parseFloat(thumbnailSize)
-        }
-        
-        console.log(`图片处理完成:`)
-        console.log(`  原图: ${originalSize}KB (${originalWidth}×${originalHeight}) - 存储在外部`)
-        console.log(`  缩略图: ${thumbnailSize}KB (${thumbWidth}×${thumbHeight})`)
-        console.log(`  图片ID: ${imageId}`)
-      }
-      
-      reader.readAsDataURL(file)
-    } catch (error) {
-      console.error('图片处理失败:', error)
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      await processImageData(e.target.result, file.name)
     }
+    reader.readAsDataURL(file)
   }
 }
 
@@ -297,6 +255,155 @@ const textChangEvent = () => {
     node.value.data.text = ''
   }
 }
+
+// 处理截图完成
+const handleScreenshotComplete = async (imageDataUrl) => {
+  isScreenshotMode.value = false
+  
+  if (!imageDataUrl || !node.value) return
+  
+  await processImageData(imageDataUrl, `截图_${new Date().toLocaleString('zh-CN').replace(/[/:]/g, '-')}.png`)
+}
+
+// 取消截图
+const handleScreenshotCancel = () => {
+  isScreenshotMode.value = false
+}
+
+// 从剪贴板粘贴图片
+const pasteFromClipboard = async () => {
+  try {
+    const clipboardItems = await navigator.clipboard.read()
+    
+    for (const item of clipboardItems) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          const blob = await item.getType(type)
+          const reader = new FileReader()
+          
+          reader.onload = async (e) => {
+            await processImageData(e.target.result, '剪贴板图片.png')
+          }
+          
+          reader.readAsDataURL(blob)
+          return
+        }
+      }
+    }
+    
+    alert('剪贴板中没有图片')
+  } catch (error) {
+    console.error('读取剪贴板失败:', error)
+    alert('读取剪贴板失败，请确保已授权剪贴板访问权限')
+  }
+}
+
+// 处理图片数据的通用函数
+const processImageData = async (imageDataUrl, fileName) => {
+  if (!node.value) return
+  
+  try {
+    const img = new Image()
+    img.src = imageDataUrl
+    
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+    })
+    
+    const originalWidth = img.width
+    const originalHeight = img.height
+    const originalSize = (imageDataUrl.length * 0.75 / 1024).toFixed(2)
+    
+    // 创建缩略图
+    const thumbMaxSize = 120
+    let thumbWidth = originalWidth
+    let thumbHeight = originalHeight
+    
+    if (thumbWidth > thumbHeight) {
+      if (thumbWidth > thumbMaxSize) {
+        thumbHeight = Math.round((thumbHeight * thumbMaxSize) / thumbWidth)
+        thumbWidth = thumbMaxSize
+      }
+    } else {
+      if (thumbHeight > thumbMaxSize) {
+        thumbWidth = Math.round((thumbWidth * thumbMaxSize) / thumbHeight)
+        thumbHeight = thumbMaxSize
+      }
+    }
+    
+    const thumbCanvas = document.createElement('canvas')
+    const thumbCtx = thumbCanvas.getContext('2d', { alpha: false })
+    thumbCanvas.width = thumbWidth
+    thumbCanvas.height = thumbHeight
+    
+    thumbCtx.imageSmoothingEnabled = true
+    thumbCtx.imageSmoothingQuality = 'medium'
+    thumbCtx.drawImage(img, 0, 0, thumbWidth, thumbHeight)
+    
+    const thumbnail = thumbCanvas.toDataURL('image/jpeg', 0.6)
+    const thumbnailSize = (thumbnail.length * 0.75 / 1024).toFixed(2)
+    
+    // 生成唯一的 ID
+    const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const thumbnailId = `thumb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    
+    // 原图存储到 IndexedDB，缩略图存储到内存
+    await storeImage(imageId, imageDataUrl)
+    storeThumbnail(thumbnailId, thumbnail)
+    
+    // 保存数据
+    if (!node.value.data) node.value.data = {}
+    node.value.data.imageId = imageId
+    node.value.data.thumbnailId = thumbnailId
+    node.value.data.imageName = fileName
+    node.value.data.imageInfo = {
+      originalWidth,
+      originalHeight,
+      thumbnailWidth: thumbWidth,
+      thumbnailHeight: thumbHeight,
+      originalSize,
+      thumbnailSize: parseFloat(thumbnailSize)
+    }
+    
+    console.log('图片处理完成:', fileName)
+  } catch (error) {
+    console.error('图片处理失败:', error)
+  }
+}
+
+// 监听全局粘贴事件
+const handleGlobalPaste = async (e) => {
+  // 只在选中图片节点时处理
+  if (!node.value || node.value.type !== 'image') return
+  
+  const items = e.clipboardData?.items
+  if (!items) return
+  
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault()
+      const blob = item.getAsFile()
+      const reader = new FileReader()
+      
+      reader.onload = async (event) => {
+        await processImageData(event.target.result, `粘贴_${new Date().toLocaleString('zh-CN').replace(/[/:]/g, '-')}.png`)
+      }
+      
+      reader.readAsDataURL(blob)
+      break
+    }
+  }
+}
+
+// 添加全局粘贴监听
+onMounted(() => {
+  window.addEventListener('paste', handleGlobalPaste)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('paste', handleGlobalPaste)
+})
 
 </script>
 
@@ -345,6 +452,52 @@ const textChangEvent = () => {
   border: 1px solid #ddd;
   border-radius: 4px;
 }
+
+.upload-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.btn-upload,
+.btn-screenshot,
+.btn-paste {
+  flex: 1;
+  padding: 6px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s;
+}
+
+.btn-upload:hover {
+  color: #1890ff;
+  border-color: #1890ff;
+}
+
+.btn-screenshot:hover {
+  color: #52c41a;
+  border-color: #52c41a;
+}
+
+.btn-paste:hover {
+  color: #722ed1;
+  border-color: #722ed1;
+}
+
+.paste-hint {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f0f5ff;
+  border: 1px dashed #adc6ff;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #597ef7;
+  text-align: center;
+}
+
 .preview {
   margin-top: 10px;
   text-align: center;
