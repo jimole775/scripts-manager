@@ -15,9 +15,39 @@
       <div class="form-item">
         <label>图片</label>
         <input type="file" accept="image/*" @change="handleImageUpload" />
-        <div v-if="node.data.image" class="preview">
-          <img :src="node.data.image" />
+        <div v-if="node.data.thumbnailId" class="preview">
+          <img 
+            :src="getThumbnailSrc(node.data.thumbnailId)" 
+            @click="showImagePreview"
+            class="preview-thumbnail"
+          />
           <button @click="clearImage" class="btn-clear">清除</button>
+        </div>
+      </div>
+      
+      <!-- 图片信息 -->
+      <div v-if="node.data.imageInfo" class="image-info">
+        <div class="info-title">图片信息</div>
+        <div class="info-row">
+          <span class="info-label">文件名:</span>
+          <span class="info-value" :title="node.data.imageName">{{ node.data.imageName }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">原图尺寸:</span>
+          <span class="info-value">{{ node.data.imageInfo.originalWidth }} × {{ node.data.imageInfo.originalHeight }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">缩略图:</span>
+          <span class="info-value">{{ node.data.imageInfo.thumbnailWidth }} × {{ node.data.imageInfo.thumbnailHeight }}</span>
+        </div>
+        <div class="info-divider"></div>
+        <div class="info-row">
+          <span class="info-label">原图大小:</span>
+          <span class="info-value">{{ node.data.imageInfo.originalSize }} KB</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">缩略图:</span>
+          <span class="info-value thumbnail">{{ node.data.imageInfo.thumbnailSize }} KB</span>
         </div>
       </div>
     </div>
@@ -68,10 +98,29 @@
   <div v-else class="properties-panel empty">
     选择一个节点以编辑属性
   </div>
+  
+  <!-- 图片预览弹窗 -->
+  <a-modal
+    v-model:open="previewVisible"
+    title="图片预览"
+    :footer="null"
+    :width="800"
+    centered
+  >
+    <div class="image-preview-modal">
+      <div v-if="previewLoading" class="preview-loading">
+        <a-spin size="large" />
+        <p>加载原图中...</p>
+      </div>
+      <img v-else-if="previewImageSrc" :src="previewImageSrc" class="preview-image" />
+      <p v-else class="preview-error">加载失败</p>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { storeImage, deleteImage, getThumbnail, storeThumbnail, deleteThumbnail, getImage } from '../utils/imageStore'
 
 const props = defineProps({
   selectedNode: {
@@ -84,26 +133,136 @@ const props = defineProps({
 // on the node.data object directly, Vue Reactivity handles it.
 const node = computed(() => props.selectedNode)
 
-const handleImageUpload = (event) => {
+// 获取缩略图（从内存）
+const getThumbnailSrc = (thumbnailId) => {
+  return getThumbnail(thumbnailId)
+}
+
+// 图片预览相关
+const previewVisible = ref(false)
+const previewImageSrc = ref(null)
+const previewLoading = ref(false)
+
+// 显示图片预览
+const showImagePreview = async () => {
+  if (!node.value?.data?.imageId) return
+  
+  previewVisible.value = true
+  previewLoading.value = true
+  previewImageSrc.value = null
+  
+  try {
+    // 从 IndexedDB 加载原图
+    const originalImage = await getImage(node.value.data.imageId)
+    previewImageSrc.value = originalImage
+  } catch (error) {
+    console.error('加载原图失败:', error)
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+const handleImageUpload = async (event) => {
   const file = event.target.files[0]
   if (file && node.value) {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      // Ensure data object exists
-      if (!node.value.data) node.value.data = {}
-      node.value.data.image = e.target.result
-      node.value.data.imageName = file.name
+    try {
+      const img = new Image()
+      const reader = new FileReader()
+      
+      reader.onload = (e) => {
+        const originalImage = e.target.result
+        const originalSize = (originalImage.length * 0.75 / 1024).toFixed(2)
+        img.src = originalImage
+        img.dataset.originalImage = originalImage
+        img.dataset.originalSize = originalSize
+      }
+      
+      img.onload = async () => {
+        const originalWidth = img.width
+        const originalHeight = img.height
+        const originalSize = parseFloat(img.dataset.originalSize)
+        const originalImage = img.dataset.originalImage
+        
+        // 只创建缩略图用于节点显示：最大 120px，质量 0.6
+        const thumbMaxSize = 120
+        let thumbWidth = originalWidth
+        let thumbHeight = originalHeight
+        
+        if (thumbWidth > thumbHeight) {
+          if (thumbWidth > thumbMaxSize) {
+            thumbHeight = Math.round((thumbHeight * thumbMaxSize) / thumbWidth)
+            thumbWidth = thumbMaxSize
+          }
+        } else {
+          if (thumbHeight > thumbMaxSize) {
+            thumbWidth = Math.round((thumbWidth * thumbMaxSize) / thumbHeight)
+            thumbHeight = thumbMaxSize
+          }
+        }
+        
+        const thumbCanvas = document.createElement('canvas')
+        const thumbCtx = thumbCanvas.getContext('2d', { alpha: false })
+        thumbCanvas.width = thumbWidth
+        thumbCanvas.height = thumbHeight
+        
+        thumbCtx.imageSmoothingEnabled = true
+        thumbCtx.imageSmoothingQuality = 'medium'
+        thumbCtx.drawImage(img, 0, 0, thumbWidth, thumbHeight)
+        
+        const thumbnail = thumbCanvas.toDataURL('image/jpeg', 0.6)
+        const thumbnailSize = (thumbnail.length * 0.75 / 1024).toFixed(2)
+        
+        // 生成唯一的 ID
+        const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const thumbnailId = `thumb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        
+        // 原图存储到 IndexedDB，缩略图存储到内存
+        await storeImage(imageId, originalImage)
+        storeThumbnail(thumbnailId, thumbnail)
+        
+        // 保存数据：只保存 ID 引用
+        if (!node.value.data) node.value.data = {}
+        node.value.data.imageId = imageId // 原图 ID（存储在 IndexedDB）
+        node.value.data.thumbnailId = thumbnailId // 缩略图 ID（存储在内存）
+        node.value.data.imageName = file.name
+        node.value.data.imageInfo = {
+          originalWidth,
+          originalHeight,
+          thumbnailWidth: thumbWidth,
+          thumbnailHeight: thumbHeight,
+          originalSize,
+          thumbnailSize: parseFloat(thumbnailSize)
+        }
+        
+        console.log(`图片处理完成:`)
+        console.log(`  原图: ${originalSize}KB (${originalWidth}×${originalHeight}) - 存储在外部`)
+        console.log(`  缩略图: ${thumbnailSize}KB (${thumbWidth}×${thumbHeight})`)
+        console.log(`  图片ID: ${imageId}`)
+      }
+      
+      reader.readAsDataURL(file)
+    } catch (error) {
+      console.error('图片处理失败:', error)
     }
-    reader.readAsDataURL(file)
   }
 }
 
 const clearImage = () => {
   if (node.value && node.value.data) {
-    node.value.data.image = null
+    // 从外部存储中删除原图和缩略图
+    if (node.value.data.imageId) {
+      deleteImage(node.value.data.imageId)
+    }
+    if (node.value.data.thumbnailId) {
+      deleteThumbnail(node.value.data.thumbnailId)
+    }
+    node.value.data.imageId = null
+    node.value.data.thumbnailId = null
     node.value.data.imageName = null
+    node.value.data.imageInfo = null
   }
 }
+
 </script>
 
 <style scoped>
@@ -155,15 +314,133 @@ const clearImage = () => {
   margin-top: 10px;
   text-align: center;
 }
-.preview img {
+
+.preview-thumbnail {
   max-width: 100%;
   border: 1px solid #eee;
+  cursor: pointer;
+  transition: all 0.3s;
 }
+
+.preview-thumbnail:hover {
+  border-color: #1890ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+  transform: scale(1.02);
+}
+
 .btn-clear {
   margin-top: 5px;
   font-size: 10px;
   background: #f5f5f5;
   border: 1px solid #ccc;
   cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 3px;
+}
+
+.btn-clear:hover {
+  background: #ff4d4f;
+  color: white;
+  border-color: #ff4d4f;
+}
+
+.image-preview-modal {
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-loading {
+  text-align: center;
+}
+
+.preview-loading p {
+  margin-top: 16px;
+  color: #666;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.preview-error {
+  color: #ff4d4f;
+  text-align: center;
+}
+
+.image-info {
+  background: #f9f9f9;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+.info-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.info-divider {
+  height: 1px;
+  background: #e8e8e8;
+  margin: 8px 0;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-row.highlight {
+  background: #e6f7ff;
+  margin: 5px -5px 0;
+  padding: 5px;
+  border-radius: 3px;
+}
+
+.info-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.info-value {
+  color: #333;
+  font-weight: normal;
+  text-align: right;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info-value.compression {
+  color: #1890ff;
+  font-weight: 600;
+}
+
+.info-value.thumbnail {
+  color: #722ed1;
+  font-weight: 600;
+}
+
+.info-value.success {
+  color: #52c41a;
+  font-weight: 700;
+  font-size: 12px;
 }
 </style>
