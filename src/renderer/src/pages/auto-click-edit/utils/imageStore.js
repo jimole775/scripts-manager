@@ -49,6 +49,71 @@ export function getThumbnail(id) {
 }
 
 /**
+ * 从原图恢复缩略图（用于页面刷新后恢复）
+ */
+export async function restoreThumbnail(imageId, thumbnailId) {
+  // 如果缩略图已存在，直接返回
+  if (thumbnailStore.has(thumbnailId)) {
+    return thumbnailStore.get(thumbnailId)
+  }
+  
+  try {
+    // 从 IndexedDB 获取原图
+    const originalImage = await getImage(imageId)
+    if (!originalImage) {
+      console.warn(`无法恢复缩略图: 原图 ${imageId} 不存在`)
+      return null
+    }
+    
+    // 重新生成缩略图
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const thumbMaxSize = 120
+        let thumbWidth = img.width
+        let thumbHeight = img.height
+        
+        if (thumbWidth > thumbHeight) {
+          if (thumbWidth > thumbMaxSize) {
+            thumbHeight = Math.round((thumbHeight * thumbMaxSize) / thumbWidth)
+            thumbWidth = thumbMaxSize
+          }
+        } else {
+          if (thumbHeight > thumbMaxSize) {
+            thumbWidth = Math.round((thumbWidth * thumbMaxSize) / thumbHeight)
+            thumbHeight = thumbMaxSize
+          }
+        }
+        
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d', { alpha: false })
+        canvas.width = thumbWidth
+        canvas.height = thumbHeight
+        
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'medium'
+        ctx.drawImage(img, 0, 0, thumbWidth, thumbHeight)
+        
+        const thumbnail = canvas.toDataURL('image/jpeg', 0.6)
+        
+        // 存储到内存
+        thumbnailStore.set(thumbnailId, thumbnail)
+        console.log(`缩略图已恢复: ${thumbnailId}`)
+        resolve(thumbnail)
+      }
+      img.onerror = () => {
+        console.error(`恢复缩略图失败: 无法加载原图 ${imageId}`)
+        resolve(null)
+      }
+      img.src = originalImage
+    })
+  } catch (error) {
+    console.error('恢复缩略图失败:', error)
+    return null
+  }
+}
+
+/**
  * 删除缩略图
  */
 export function deleteThumbnail(id) {
