@@ -2,17 +2,20 @@
   <div class="page-container">
     <!-- Header / Tabs -->
     <div class="tabs-header">
-      <div 
-        v-for="script in scripts" 
-        :key="script.id"
-        class="tab-item"
-        :class="{ active: activeScriptId === script.id }"
-        @click="switchTab(script.id)"
-      >
-        {{ script.name }}
-        <span v-if="scripts.length > 1" class="close-tab" @click.stop="closeTab(script.id)">×</span>
+      <div class="tabs-scroll-container" ref="tabsScrollContainer">
+        <div 
+          v-for="script in scripts" 
+          :key="script.id"
+          class="tab-item"
+          :class="{ active: activeScriptId === script.id }"
+          @click="switchTab(script.id)"
+        >
+          {{ script.name }}
+          <span v-if="scripts.length > 1" class="close-tab" @click.stop="closeTab(script.id)">×</span>
+        </div>
+        <div v-if="!hasScrollbar" class="add-tab add-tab-inline" @click="addNewScript">+</div>
       </div>
-      <div class="add-tab" @click="addNewScript">+</div>
+      <div v-if="hasScrollbar" class="add-tab add-tab-fixed" @click="addNewScript">+</div>
     </div>
 
     <!-- Main Content -->
@@ -24,19 +27,21 @@
 
       <!-- Canvas -->
       <div class="center-panel">
+        <!-- Action Buttons - Top Left -->
+        <div class="top-actions">
+          <button class="action-btn import" @click="importScript">导入</button>
+          <button class="action-btn save" @click="saveConfig">保存</button>
+          <button class="action-btn execute" @click="executeScript">执行</button>
+        </div>
+
         <FlowEditor 
           v-if="currentScript"
+          :key="activeScriptId"
           v-model="currentScript.content"
           @selection-change="onSelectionChange"
         />
         <div v-else class="no-script">
           No script selected
-        </div>
-
-        <!-- Floating Buttons -->
-        <div class="floating-actions">
-          <button class="action-btn save" @click="saveConfig">Save</button>
-          <button class="action-btn execute" @click="executeScript">Execute</button>
         </div>
       </div>
 
@@ -49,7 +54,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import FlowEditor from './components/FlowEditor.vue'
 import PropertiesPanel from './components/PropertiesPanel.vue'
@@ -58,10 +63,28 @@ import PropertiesPanel from './components/PropertiesPanel.vue'
 const scripts = ref([])
 const activeScriptId = ref(null)
 const selectedNode = ref(null)
+const tabsScrollContainer = ref(null)
+const hasScrollbar = ref(false)
 
 const currentScript = computed(() => {
   return scripts.value.find(s => s.id === activeScriptId.value)
 })
+
+// 检测是否有滚动条
+const checkScrollbar = () => {
+  if (tabsScrollContainer.value) {
+    hasScrollbar.value = tabsScrollContainer.value.scrollWidth > tabsScrollContainer.value.clientWidth
+  }
+}
+
+// 监听scripts变化，检测滚动条
+watch(scripts, async () => {
+  await nextTick()
+  checkScrollbar()
+}, { deep: true })
+
+// 自动保存定时器
+let autoSaveInterval = null
 
 // Lifecycle
 onMounted(() => {
@@ -69,6 +92,30 @@ onMounted(() => {
   if (scripts.value.length === 0) {
     addNewScript()
   }
+  
+  // 初始检测滚动条
+  nextTick(() => {
+    checkScrollbar()
+  })
+  
+  // 监听窗口大小变化
+  window.addEventListener('resize', checkScrollbar)
+  
+  // 启动自动保存：每30秒保存一次
+  autoSaveInterval = setInterval(() => {
+    localStorage.setItem('auto-click-scripts', JSON.stringify(scripts.value))
+    console.log('自动保存完成', new Date().toLocaleTimeString())
+  }, 30000)
+})
+
+onUnmounted(() => {
+  // 清理定时器
+  if (autoSaveInterval) {
+    clearInterval(autoSaveInterval)
+  }
+  
+  // 移除resize监听
+  window.removeEventListener('resize', checkScrollbar)
 })
 
 // Methods
@@ -87,6 +134,15 @@ const addNewScript = () => {
           sourcePosition: 'right',
           deletable: false,
           data: { label: '开始' }
+        },
+        { 
+          id: 'end-node', 
+          type: 'output', // Standard output node as end
+          label: '结束', 
+          position: { x: 600, y: 50 },
+          targetPosition: 'left',
+          deletable: false,
+          data: { label: '结束' }
         }
       ],
       edges: []
@@ -149,6 +205,51 @@ const executeScript = () => {
   console.log('Script Content:', JSON.stringify(currentScript.value.content, null, 2))
 }
 
+const importScript = () => {
+  // Create file input element
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+  
+  input.onchange = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        const content = JSON.parse(event.target.result)
+        
+        // Validate the imported content has nodes and edges
+        if (!content.nodes || !content.edges) {
+          alert('无效的脚本文件格式')
+          return
+        }
+        
+        // Create a new script with imported content
+        const newId = Date.now().toString()
+        const newScript = {
+          id: newId,
+          name: file.name.replace('.json', ''),
+          content: content
+        }
+        
+        scripts.value.push(newScript)
+        activeScriptId.value = newId
+        
+        alert('脚本导入成功！')
+      } catch (error) {
+        console.error('Import error:', error)
+        alert('导入失败：文件格式错误')
+      }
+    }
+    
+    reader.readAsText(file)
+  }
+  
+  input.click()
+}
+
 const loadScripts = () => {
   const saved = localStorage.getItem('auto-click-scripts')
   if (saved) {
@@ -166,6 +267,16 @@ const loadScripts = () => {
             // Force source position to right (rotate 90 deg left)
             startNode.sourcePosition = 'right'
           }
+          
+          // Handle end node
+          const endNode = script.content.nodes.find(n => n.id === 'end-node')
+          if (endNode) {
+            if (endNode.dragHandle === '.drag-handle') {
+              delete endNode.dragHandle
+            }
+            // Force target position to left
+            endNode.targetPosition = 'left'
+          }
         }
       })
 
@@ -177,11 +288,6 @@ const loadScripts = () => {
     }
   }
 }
-
-// Watch for changes to auto-save (optional)
-watch(scripts, () => {
-  localStorage.setItem('auto-click-scripts', JSON.stringify(scripts.value))
-}, { deep: true })
 
 </script>
 
@@ -201,6 +307,32 @@ watch(scripts, () => {
   height: 40px;
 }
 
+.tabs-scroll-container {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #bbb #f0f2f5;
+}
+
+.tabs-scroll-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tabs-scroll-container::-webkit-scrollbar-track {
+  background: #f0f2f5;
+}
+
+.tabs-scroll-container::-webkit-scrollbar-thumb {
+  background: #bbb;
+  border-radius: 3px;
+}
+
+.tabs-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
 .tab-item {
   padding: 8px 16px;
   background: #e6e6e6;
@@ -213,6 +345,8 @@ watch(scripts, () => {
   align-items: center;
   gap: 8px;
   font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-item.active {
@@ -236,10 +370,22 @@ watch(scripts, () => {
   cursor: pointer;
   font-weight: bold;
   color: #666;
+  flex-shrink: 0;
 }
 .add-tab:hover {
   background: #e6e6e6;
   border-radius: 4px;
+}
+
+.add-tab-inline {
+  /* 内联在滚动容器内，跟随tab移动 */
+  margin-left: 0;
+}
+
+.add-tab-fixed {
+  /* 固定在右侧，不随滚动移动 */
+  border-left: 1px solid #ddd;
+  padding-left: 12px;
 }
 
 .editor-body {
@@ -259,30 +405,35 @@ watch(scripts, () => {
   background: #fafafa;
 }
 
+.top-actions {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
 .right-panel {
   width: 250px;
   border-left: 1px solid #eee;
 }
 
-.floating-actions {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  display: flex;
-  gap: 10px;
-  z-index: 10;
-}
-
 .action-btn {
-  padding: 8px 16px;
+  padding: 6px 14px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-weight: bold;
+  font-weight: 500;
+  font-size: 13px;
   color: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: all 0.2s;
 }
 
+.action-btn.import {
+  background: #722ed1;
+}
 .action-btn.save {
   background: #1890ff;
 }
@@ -291,6 +442,8 @@ watch(scripts, () => {
 }
 .action-btn:hover {
   opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.15);
 }
 
 .no-script {
