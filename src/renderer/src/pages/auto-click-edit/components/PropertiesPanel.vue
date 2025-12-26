@@ -14,10 +14,10 @@
     <div v-if="node.type === 'image'" class="type-form">
       <div class="form-item">
         <label>图片</label>
-        <input type="file" accept="image/*" @change="handleImageUpload" />
-        <div v-if="node.data.thumbnailId" class="preview">
+        <input ref="fileInputRef" type="file" accept="image/*" @change="handleImageUpload" />
+        <div v-if="thumbnailSrc" class="preview">
           <img 
-            :src="getThumbnailSrc(node.data.thumbnailId)" 
+            :src="thumbnailSrc" 
             @click="showImagePreview"
             class="preview-thumbnail"
           />
@@ -64,13 +64,13 @@
     <div v-if="node.type === 'text'" class="type-form">
       <div class="form-item">
         <label>输入类型</label>
-        <select v-model="node.data.inputType">
-          <option value="manual">手动</option>
+        <select v-model="node.data.inputType" @change="textChangEvent">
+          <option value="fixed">固定</option>
           <option value="random">随机</option>
-          <option value="fixed_random">固定+随机</option>
+          <option value="fixed_random">固定_随机</option>
         </select>
       </div>
-      <div class="form-item">
+      <div v-if="node.data.inputType !== 'random'" class="form-item">
         <label>值模板</label>
         <input v-model="node.data.text" type="text" />
       </div>
@@ -80,18 +80,18 @@
     <div v-if="node.type === 'sleep'" class="type-form">
       <div class="form-item">
         <label>模式</label>
-        <select v-model="node.data.mode">
+        <select v-model="node.data.mode" @change="onModeChange">
           <option value="fixed">固定</option>
           <option value="random">随机</option>
         </select>
       </div>
       <div class="form-item">
-        <label>时长 (秒)</label>
-        <input v-model.number="node.data.duration" type="number" step="0.1" />
+        <label>{{ node.data.mode === 'random' ? '最小时长 (秒)' : '时长 (秒)' }}</label>
+        <input v-model.number="node.data.duration" type="number" step="0.1" min="0" />
       </div>
       <div v-if="node.data.mode === 'random'" class="form-item">
         <label>最大时长 (秒)</label>
-        <input v-model.number="node.data.maxDuration" type="number" step="0.1" />
+        <input v-model.number="node.data.maxDuration" type="number" step="0.1" min="0" />
       </div>
     </div>
   </div>
@@ -119,7 +119,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeImage, deleteImage, getThumbnail, storeThumbnail, deleteThumbnail, getImage } from '../utils/imageStore'
 
 const props = defineProps({
@@ -133,15 +133,31 @@ const props = defineProps({
 // on the node.data object directly, Vue Reactivity handles it.
 const node = computed(() => props.selectedNode)
 
-// 获取缩略图（从内存）
-const getThumbnailSrc = (thumbnailId) => {
-  return getThumbnail(thumbnailId)
-}
+// 文件输入框的引用
+const fileInputRef = ref(null)
+
+// 获取缩略图（从内存）- 使用 computed 以便响应式更新
+const thumbnailSrc = computed(() => {
+  const thumbnailId = node.value?.data?.thumbnailId
+  if (thumbnailId) {
+    const src = getThumbnail(thumbnailId)
+    console.log(`属性面板获取缩略图: 节点=${node.value?.id}, thumbnailId=${thumbnailId}, 结果=${src ? '成功' : '失败'}`)
+    return src
+  }
+  return null
+})
 
 // 图片预览相关
 const previewVisible = ref(false)
 const previewImageSrc = ref(null)
 const previewLoading = ref(false)
+
+// 监听节点切换，清空文件输入框
+watch(() => props.selectedNode?.id, () => {
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
+})
 
 // 显示图片预览
 const showImagePreview = async () => {
@@ -159,6 +175,19 @@ const showImagePreview = async () => {
     console.error('加载原图失败:', error)
   } finally {
     previewLoading.value = false
+  }
+}
+
+// 处理睡眠节点模式切换
+const onModeChange = () => {
+  if (node.value && node.value.type === 'sleep') {
+    // 根据模式设置 random 字段
+    node.value.data.random = node.value.data.mode === 'random'
+    
+    // 如果切换到随机模式，确保有 maxDuration
+    if (node.value.data.random && !node.value.data.maxDuration) {
+      node.value.data.maxDuration = (node.value.data.duration || 1) + 1
+    }
   }
 }
 
@@ -260,6 +289,12 @@ const clearImage = () => {
     node.value.data.thumbnailId = null
     node.value.data.imageName = null
     node.value.data.imageInfo = null
+  }
+}
+
+const textChangEvent = () => {
+  if (node.value.data.inputType === 'random') {
+    node.value.data.text = ''
   }
 }
 
