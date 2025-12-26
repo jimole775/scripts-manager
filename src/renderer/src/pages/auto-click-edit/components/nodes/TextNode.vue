@@ -3,8 +3,8 @@
     :id="id"
     title="文本输入" 
     :selected="selected" 
-    :hasConnections="hasConnections" 
-    :data="data"
+    :hasConnections="hasConnections"
+    :rotation="data.rotation || 0"
     @delete="onDelete"
   >
     <div class="node-body">
