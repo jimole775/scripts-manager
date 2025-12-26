@@ -1,10 +1,10 @@
 <template>
   <NodeWrapper 
     :id="id"
-    title="DOM 路径" 
+    :title="label || 'DOM 路径'" 
     :selected="selected" 
     :hasConnections="hasConnections"
-    :rotation="data.rotation || 0"
+    :rotation="data.rotation !== undefined ? data.rotation : 2"
     @delete="onDelete"
   >
     <div class="node-body">
@@ -19,7 +19,7 @@ import { computed } from 'vue'
 import NodeWrapper from './NodeWrapper.vue'
 import { useVueFlow } from '@vue-flow/core'
 
-const props = defineProps(['id', 'data', 'selected'])
+const props = defineProps(['id', 'data', 'selected', 'label'])
 const { removeNodes, getConnectedEdges, findNode } = useVueFlow()
 
 // 检查当前节点是否有连接线
@@ -39,15 +39,17 @@ const onDelete = () => {
 .label {
   color: #999;
   margin-bottom: 2px;
+  font-size: 9px;
 }
 .value {
   font-family: monospace;
   background: #f0f0f0;
-  padding: 2px 4px;
+  padding: 2px 3px;
   border-radius: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 120px;
+  max-width: 100%;
+  font-size: 9px;
 }
 </style>
