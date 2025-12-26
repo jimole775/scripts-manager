@@ -83,20 +83,20 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  data: {
-    type: Object,
-    default: () => ({})
+  rotation: {
+    type: Number,
+    default: 0
   }
 })
 
 const emit = defineEmits(['delete'])
 
 // 获取 VueFlow 实例
-const { updateNodeInternals, updateNodeData } = useVueFlow()
+const { updateNodeInternals, updateNode } = useVueFlow()
 
 // 连接点位置状态：0=bottom, 1=left, 2=right (跳过 top)
-// 默认输出在右侧(2)，输入在左侧
-const rotationState = ref(props.data?.rotation ?? 2)
+// 默认输出在底部(0)，输入在顶部
+const rotationState = ref(props.rotation)
 
 // 位置映射（跳过 top）
 const positions = [Position.Bottom, Position.Left, Position.Right]
