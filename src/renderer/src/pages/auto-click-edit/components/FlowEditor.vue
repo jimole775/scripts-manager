@@ -60,13 +60,13 @@ watch(() => props.modelValue, (newVal) => {
   }
 }, { immediate: true, deep: true })
 
-// Sync local to props (basic debounce or just on change)
+// Sync local to props (使用浅层比较，避免深度监听大数据)
 watch([nodes, edges], () => {
   emit('update:modelValue', {
     nodes: nodes.value,
     edges: edges.value
   })
-}, { deep: true })
+})
 
 // Register Node Types
 const nodeTypes = {
